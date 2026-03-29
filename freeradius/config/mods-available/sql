@@ -1,0 +1,84 @@
+# =============================================================
+# mods-available/sql  –  Módulo SQL do FreeRADIUS
+# Localização: /etc/freeradius/3.0/mods-available/sql
+#
+# Para ATIVAR: cria link simbólico em mods-enabled/sql
+#   ln -s ../mods-available/sql mods-enabled/sql
+# =============================================================
+
+sql {
+  # -----------------------------------------------------------
+  # Driver de banco de dados
+  # Para MariaDB/MySQL usamos o driver "rlm_sql_mysql"
+  # -----------------------------------------------------------
+  driver      = "rlm_sql_mysql"
+
+  # Dialeto SQL (afeta queries internas do FreeRADIUS)
+  dialect     = "mysql"
+
+  # -----------------------------------------------------------
+  # Conexão com o banco
+  # Usa variáveis de ambiente injetadas pelo docker-compose
+  # -----------------------------------------------------------
+  server      = "${env:DB_HOST}"     # hostname ou IP do MariaDB
+  port        = "${env:DB_PORT}"     # porta (3306)
+  login       = "${env:DB_USER}"     # usuário do banco
+  password    = "${env:DB_PASS}"     # senha do banco
+  radius_db   = "${env:DB_NAME}"     # nome do banco
+
+  # -----------------------------------------------------------
+  # Pool de conexões
+  # -----------------------------------------------------------
+  pool {
+    start      = 5     # conexões abertas na inicialização
+    min        = 3     # mínimo de conexões abertas
+    max        = 10    # máximo de conexões simultâneas
+    spare      = 3     # conexões extras em standby
+    uses       = 0     # 0 = ilimitado
+    retry_delay = 30
+    lifetime   = 0
+    idle_timeout = 60
+  }
+
+  # -----------------------------------------------------------
+  # Nomes das tabelas (devem bater com o schema SQL)
+  # -----------------------------------------------------------
+  # Tabela de atributos de verificação (senha, bloqueio, etc.)
+  authcheck_table  = "radcheck"
+
+  # Tabela de atributos de resposta (IP fixo, VLAN, etc.)
+  authreply_table  = "radreply"
+
+  # Tabela de grupos de verificação
+  groupcheck_table = "radgroupcheck"
+
+  # Tabela de grupos de resposta
+  groupreply_table = "radgroupreply"
+
+  # Tabela de associação usuário-grupo
+  usergroup_table  = "radusergroup"
+
+  # Tabela de accounting (sessões)
+  acct_table1      = "radacct"    # INSERT na abertura da sessão
+  acct_table2      = "radacct"    # UPDATE no encerramento da sessão
+
+  # Tabela de pós-autenticação (log Accept/Reject)
+  postauth_table   = "radpostauth"
+
+  # Tabela de NAS clients (lê do banco em vez de clients.conf)
+  nas_table        = "nas"
+
+  # -----------------------------------------------------------
+  # Comportamento de grupos
+  # -----------------------------------------------------------
+  # Carrega atributos de grupo para cada usuário autenticado
+  read_groups      = yes
+
+  # Carrega NAS do banco de dados
+  read_clients     = yes
+
+  # -----------------------------------------------------------
+  # Onde ficam as queries SQL customizadas
+  # -----------------------------------------------------------
+  $INCLUDE ${modconfdir}/sql/mysql/queries.conf
+}

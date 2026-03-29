@@ -1,0 +1,96 @@
+
+# =============================================================
+# POC: FreeRADIUS + MariaDB + daloRADIUS
+# =============================================================
+# Rede interna para os 3 serviços conversarem entre si.
+# Apenas as portas necessárias são expostas ao host.
+
+networks:
+  radius-net:
+    driver: bridge          # rede bridge padrão do Docker
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24   # faixa de IPs da rede interna
+
+volumes:
+  mariadb-data:             # volume persistente para o banco de dados
+
+services:
+
+  # -----------------------------------------------------------
+  # 1. MARIADB – banco de dados central
+  # -----------------------------------------------------------
+  mariadb:
+    image: mariadb:10.11
+    container_name: radius-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword   # senha do root (troque em produção!)
+      MYSQL_DATABASE: radius              # banco criado automaticamente
+      MYSQL_USER: radius                  # usuário da aplicação
+      MYSQL_PASSWORD: radpass             # senha do usuário (troque em produção!)
+    volumes:
+      - mariadb-data:/var/lib/mysql                        # dados persistentes
+      - ./mariadb/init:/docker-entrypoint-initdb.d         # scripts SQL iniciais
+    networks:
+      radius-net:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "3306:3306"         # expõe o MySQL para ferramentas externas (ex: DBeaver)
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -----------------------------------------------------------
+  # 2. FREERADIUS – servidor de autenticação
+  # -----------------------------------------------------------
+  freeradius:
+    build:
+      context: ./freeradius          # Dockerfile customizado
+    container_name: radius-server
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy   # aguarda o banco estar pronto
+    environment:
+      DB_HOST: 172.20.0.10
+      DB_PORT: 3306
+      DB_NAME: radius
+      DB_USER: radius
+      DB_PASS: radpass
+    volumes:
+      - ./freeradius/config/radiusd.conf:/etc/freeradius/3.0/radiusd.conf
+      - ./freeradius/config/clients.conf:/etc/freeradius/3.0/clients.conf
+      - ./freeradius/config/sites-available/default:/etc/freeradius/3.0/sites-available/default
+      - ./freeradius/config/sites-available/inner-tunnel:/etc/freeradius/3.0/sites-available/inner-tunnel
+    networks:
+      radius-net:
+        ipv4_address: 172.20.0.20
+    ports:
+      - "1812:1812/udp"     # autenticação RADIUS
+      - "1813:1813/udp"     # accounting RADIUS
+
+  # -----------------------------------------------------------
+  # 3. DALORADIUS – interface web de gerenciamento
+  # -----------------------------------------------------------
+  daloradius:
+    build:
+      context: ./daloradius
+    container_name: radius-daloradius
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      DALO_DB_HOST: 172.20.0.10
+      DALO_DB_PORT: 3306
+      DALO_DB_NAME: radius
+      DALO_DB_USER: radius
+      DALO_DB_PASS: radpass
+    networks:
+      radius-net:
+        ipv4_address: 172.20.0.30
+    ports:
+      - "8080:80"           # acesse http://localhost:8080 no browser
