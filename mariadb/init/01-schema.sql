@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS operators (
   email       varchar(64)  DEFAULT '',
   accesslevel varchar(10)  DEFAULT '10',
   configfile  varchar(64)  DEFAULT 'config.php',
+  lastlogin   varchar(64)  DEFAULT '',
   PRIMARY KEY (id),
   KEY username (username)
 );

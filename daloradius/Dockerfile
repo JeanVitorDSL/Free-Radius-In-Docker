@@ -1,4 +1,4 @@
-FROM php:8.1-apache-bookworm
+FROM php:8.1-apache
 
 RUN apt-get update && apt-get install -y \
         libpng-dev \
@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y \
         git \
         unzip \
         curl \
-        php-pear \
     && docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
@@ -22,12 +21,13 @@ RUN apt-get update && apt-get install -y \
         gettext \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pear channel-update pear.php.net && \
-    pear install --force DB && \
-    cp /usr/share/php/DB.php /usr/local/lib/php/DB.php && \
-    cp -r /usr/share/php/DB /usr/local/lib/php/DB && \
-    cp /usr/share/php/PEAR.php /usr/local/lib/php/PEAR.php && \
-    cp -r /usr/share/php/PEAR /usr/local/lib/php/PEAR
+# Instala PEAR via go-pear.phar (sem depender do apt)
+# e instala o pacote DB necessário para o daloRADIUS
+RUN curl -sS https://pear.php.net/go-pear.phar -o /tmp/go-pear.phar && \
+    php /tmp/go-pear.phar local && \
+    rm -f /tmp/go-pear.phar && \
+    pear channel-update pear.php.net && \
+    pear install DB
 
 RUN git clone --depth 1 --branch master \
     https://github.com/lirantal/daloradius.git \
